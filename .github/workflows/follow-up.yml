@@ -1,0 +1,74 @@
+name: Follow-Up Sequencer
+
+on:
+  schedule:
+    - cron: '30 14 * * 1-5'   # weekdays, 14:30 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (preview follow-ups, send nothing)'
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: follow-up
+  cancel-in-progress: false
+
+jobs:
+  run:
+    # Scheduled runs are off until the repository variable ENABLE_SCHEDULE is 'true',
+    # so a fresh fork or an unconfigured copy never runs (or fails) on its own.
+    if: github.event_name == 'workflow_dispatch' || vars.ENABLE_SCHEDULE == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # config/*.json is gitignored; CI writes it from repository variables
+      - name: Write config
+        env:
+          COMPANY_JSON:   ${{ vars.COMPANY_JSON }}
+          TEMPLATES_JSON: ${{ vars.TEMPLATES_JSON }}
+        run: |
+          if [ -n "$COMPANY_JSON" ];   then printf '%s' "$COMPANY_JSON"   > config/company.json;   fi
+          if [ -n "$TEMPLATES_JSON" ]; then printf '%s' "$TEMPLATES_JSON" > config/templates.json; fi
+
+      # The logs hold real contacts, so they travel in the Actions cache and are
+      # never committed. State MUST persist: without it the same contacts get
+      # the same follow-up every day.
+      - name: Restore outreach state
+        uses: actions/cache/restore@v4
+        with:
+          path: state
+          key: outreach-state-${{ github.run_id }}
+          restore-keys: |
+            outreach-state-
+
+      - name: Run follow-up sequencer
+        run: node src/follow-up.js ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          OUTREACH_SMTP_HOST: ${{ secrets.OUTREACH_SMTP_HOST }}
+          OUTREACH_SMTP_PORT: ${{ secrets.OUTREACH_SMTP_PORT }}
+          OUTREACH_SMTP_USER: ${{ secrets.OUTREACH_SMTP_USER }}
+          OUTREACH_SMTP_PASS: ${{ secrets.OUTREACH_SMTP_PASS }}
+          OUTREACH_IMAP_HOST: ${{ secrets.OUTREACH_IMAP_HOST }}
+          OUTREACH_FROM_EMAIL: ${{ secrets.OUTREACH_FROM_EMAIL }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          EMAIL_NOTIFY: ${{ secrets.EMAIL_NOTIFY }}
+          SENDER_NAME: ${{ vars.SENDER_NAME }}
+          OUTREACH_LOG_FILES: ${{ vars.OUTREACH_LOG_FILES }}
+
+      - name: Save outreach state
+        if: always() && inputs.dry_run != true
+        uses: actions/cache/save@v4
+        with:
+          path: state
+          key: outreach-state-${{ github.run_id }}

@@ -1,0 +1,18 @@
+{
+  "name": "followup-sequencer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Follow-up cadence over outreach logs: day 4 bump, day 10 breakup, reply detection by sender or subject, stale contacts marked cold without a send, suppression list and per-run send caps.",
+  "main": "src/follow-up.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "follow-up": "node src/follow-up.js",
+    "dry-run": "node src/follow-up.js --dry-run",
+    "sample": "node scripts/make-sample-log.js && node src/follow-up.js --dry-run"
+  },
+  "dependencies": {
+    "dotenv": "^17.3.1",
+    "imap": "^0.8.19",
+    "nodemailer": "^8.0.11"
+  }
+}

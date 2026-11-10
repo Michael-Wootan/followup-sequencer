@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.*
+!.env.example
+state/
+config/company.json
+config/templates.json
+*.log
+.DS_Store
